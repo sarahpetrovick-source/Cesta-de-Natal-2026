@@ -863,7 +863,61 @@ var WHATSAPP_LINK = "https://wa.me/5521973676671";
 
 function goToWhatsApp(message){
   var url = WHATSAPP_LINK + (message ? ("?text="+encodeURIComponent(message)) : "");
-  window.location.href = url;
+  // O WhatsApp não pode ser aberto DENTRO de um iframe (a VIPCommerce embute esta página em iframe).
+  var inFrame = false;
+  try{ inFrame = (window.self !== window.top); }catch(e){ inFrame = true; }
+  if(!inFrame){ window.location.href = url; return; }          // página aberta direto: comportamento de sempre
+  var opened = null;
+  try{ opened = window.open(url, '_blank'); }catch(e){ opened = null; }   // 1) nova aba/janela
+  if(opened && !opened.closed){ try{ opened.opener = null; }catch(e){} return; }
+  try{ window.top.location.href = url; }catch(e){}              // 2) janela principal (por clique do cliente)
+  setTimeout(function(){                                         // 3) se nada abriu, mostra opções manuais
+    if(document.visibilityState !== 'hidden') waFallback(url, message || '');
+  }, 1200);
+}
+
+function waFallback(url, message){
+  if(document.getElementById('waFb')) return;
+  var phone = WHATSAPP_LINK.replace(/\D/g,'');
+  var app = 'whatsapp://send?phone='+phone+(message ? '&text='+encodeURIComponent(message) : '');
+  var st = document.createElement('style');
+  st.textContent =
+    '#waFb{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;background:rgba(15,25,18,.62);display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit;}'+
+    '#waFb .wa-box{position:relative;width:100%;max-width:380px;max-height:calc(100vh - 32px);overflow:auto;background:#FAF7F0;color:#22261F;border:2px solid #C9A227;border-radius:10px;padding:22px 20px 18px;box-shadow:0 20px 50px rgba(0,0,0,.45);}'+
+    '#waFb h3{margin:0 28px 8px 0;font-size:1.15rem;color:#173229;}'+
+    '#waFb p{margin:0 0 12px;font-size:.92rem;line-height:1.45;}'+
+    '#waFb .wa-btn{display:block;width:100%;box-sizing:border-box;margin:0 0 10px;padding:13px 14px;border-radius:8px;border:none;font:700 .95rem/1.2 inherit;font-family:inherit;text-align:center;text-decoration:none;cursor:pointer;}'+
+    '#waFb .wa-main{background:#25D366;color:#073B1B;}'+
+    '#waFb .wa-sec{background:#173229;color:#fff;}'+
+    '#waFb .wa-ghost{background:#F1EBDD;color:#173229;}'+
+    '#waFb .wa-x{position:absolute;top:6px;right:8px;width:40px;height:40px;border:none;background:none;font-size:26px;line-height:1;color:#173229;cursor:pointer;}'+
+    '#waFb .wa-num{font-weight:700;color:#173229;}'+
+    '#waFb .wa-ok{margin:0;color:#2E7D46;font-weight:700;font-size:.85rem;min-height:1.2em;}';
+  document.head.appendChild(st);
+  var ov = document.createElement('div'); ov.id = 'waFb'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true');
+  ov.innerHTML =
+    '<div class="wa-box"><button type="button" class="wa-x" aria-label="Fechar">&times;</button>'+
+    '<h3>Falta só abrir o WhatsApp</h3>'+
+    '<p>Seu navegador não abriu o WhatsApp automaticamente. Toque no botão abaixo para enviar sua solicitação.</p>'+
+    '<a class="wa-btn wa-main" href="'+url+'" target="_blank" rel="noopener">Abrir WhatsApp</a>'+
+    '<a class="wa-btn wa-sec" href="'+app+'" target="_top">Abrir no aplicativo</a>'+
+    '<button type="button" class="wa-btn wa-ghost" id="waCopy">Copiar mensagem</button>'+
+    '<p class="wa-ok" id="waOk"></p>'+
+    '<p>Ou envie manualmente para <span class="wa-num">('+phone.slice(2,4)+') '+phone.slice(4,9)+'-'+phone.slice(9)+'</span>.</p></div>';
+  document.body.appendChild(ov);
+  function close(){ ov.remove(); st.remove(); }
+  ov.querySelector('.wa-x').onclick = close;
+  ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
+  ov.querySelector('#waCopy').onclick = function(){
+    var ok = function(){ document.getElementById('waOk').textContent = 'Mensagem copiada! Cole no WhatsApp.'; };
+    var legacy = function(){
+      var t = document.createElement('textarea'); t.value = message; t.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      document.body.appendChild(t); t.select();
+      try{ document.execCommand('copy'); ok(); }catch(e){ document.getElementById('waOk').textContent = 'Não foi possível copiar automaticamente.'; }
+      t.remove();
+    };
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(message).then(ok, legacy); } else legacy();
+  };
 }
 var checkIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>';
 
